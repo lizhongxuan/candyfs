@@ -1,14 +1,14 @@
 package main
 
 import (
-	"os"
 	"candyfs/cmd"
-	"candyfs/logger"
+	"candyfs/utils/log"
+	"os"
 )
 
 func main() {
 	err := cmd.Main(os.Args)
 	if err != nil {
-		logger.Fatal(err)
+		log.Fatal(err)
 	}
 }
