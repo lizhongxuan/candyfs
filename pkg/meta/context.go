@@ -2,10 +2,12 @@ package meta
 
 import (
 	"context"
+	"time"
 )
 
 type CtxKey string
 
+// Context is a wrapper around context.Context with more features.
 type Context interface {
 	context.Context
 	Gid() uint32
@@ -18,8 +20,20 @@ type Context interface {
 	CheckPermission() bool
 }
 
+// Background returns a non-nil, empty Context.
 func Background() Context {
 	return WrapContext(context.Background())
+}
+
+// WithTimeout returns a copy of parent context with timeout.
+func WithTimeout(parent Context, timeout time.Duration) (Context, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	return WrapContext(ctx), cancel
+}
+
+// WithValue returns a copy of parent in which the value associated with key is val.
+func WithValue(parent Context, key, val interface{}) Context {
+	return parent.WithValue(key, val)
 }
 
 type wrapContext struct {

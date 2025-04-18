@@ -9,6 +9,9 @@ import (
 type Meta interface {
 	// Name of database
 	Name() string
+	
+	// Format initializes the metadata storage
+	Format() error
 }
 
 // NewClient creates a Meta client for given uri.

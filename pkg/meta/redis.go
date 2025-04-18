@@ -5,12 +5,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"net"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type redisMeta struct {
@@ -173,13 +174,56 @@ func newRedisMeta(addr string, conf *Config) (Meta, error) {
 		rdb:      rdb,
 		prefix:   prefix,
 	}
-	m.en = m
 	m.checkServerConfig()
 	return m, nil
 }
 
 func (m *redisMeta) Name() string {
 	return "redis"
+}
+
+// Format initializes the Redis metadata storage
+func (m *redisMeta) Format() error {
+	// 检查Redis连接状态
+	if err := m.rdb.Ping(Background()).Err(); err != nil {
+		return fmt.Errorf("连接Redis失败: %s", err)
+	}
+	
+	// 清除现有数据 (谨慎操作)
+	// 这里只清除特定前缀的键，避免清除其他数据
+	keys, err := m.rdb.Keys(Background(), m.prefix+"*").Result()
+	if err != nil {
+		return fmt.Errorf("获取现有键失败: %s", err)
+	}
+	
+	if len(keys) > 0 {
+		if err := m.rdb.Del(Background(), keys...).Err(); err != nil {
+			return fmt.Errorf("清除现有数据失败: %s", err)
+		}
+		log.Infof("已清除 %d 个现有键", len(keys))
+	}
+	
+	// 初始化系统键
+	if err := m.rdb.Set(Background(), m.prefix+"fs:initialized", "true", 0).Err(); err != nil {
+		return fmt.Errorf("初始化系统键失败: %s", err)
+	}
+	
+	// 设置版本信息
+	if err := m.rdb.Set(Background(), m.prefix+"fs:version", "1.0", 0).Err(); err != nil {
+		return fmt.Errorf("设置版本信息失败: %s", err)
+	}
+	
+	// 初始化统计信息
+	if err := m.rdb.HSet(Background(), m.prefix+"fs:stats", 
+		"total_space", 0,
+		"used_space", 0,
+		"total_inodes", 0,
+		"used_inodes", 0).Err(); err != nil {
+		return fmt.Errorf("初始化统计信息失败: %s", err)
+	}
+	
+	log.Infof("Redis元数据存储格式化成功")
+	return nil
 }
 
 func (m *redisMeta) checkServerConfig() {
