@@ -27,6 +27,7 @@ that provides high availability and performance.`,
 	rootCmd.AddCommand(
 		versionCmd(),
 		formatCmd(),
+		mountCmd(),
 	)
 
 	// Parse and execute
