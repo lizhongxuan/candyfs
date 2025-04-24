@@ -2,8 +2,10 @@ package meta
 
 import (
 	"candyfs/utils"
-	"github.com/prometheus/client_golang/prometheus"
+	"context"
 	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type baseMeta struct {
@@ -28,7 +30,7 @@ type baseMeta struct {
 	sesMu     sync.Mutex
 	//aclCache     aclAPI.Cache
 
-	sessCtx  Context
+	sessCtx  context.Context
 	sessWG   sync.WaitGroup
 	dSliceWG sync.WaitGroup
 

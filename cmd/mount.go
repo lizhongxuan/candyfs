@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"candyfs/pkg/fs"
 	"candyfs/pkg/meta"
 	"candyfs/utils/log"
 	"fmt"
@@ -44,6 +45,7 @@ func mountCmd() *cobra.Command {
 	cmd.Flags().String("cache-dir", "/var/cache/candyfs", "缓存目录")
 	cmd.Flags().StringP("options", "o", "", "额外的挂载选项")
 	cmd.Flags().Uint64("buffer-size", 300, "读写缓冲区大小 (MB)")
+	cmd.Flags().Bool("allow-other", false, "允许其他用户访问挂载点")
 
 	return cmd
 }
@@ -56,6 +58,7 @@ func mount(cmd *cobra.Command, args []string) {
 	readOnly, _ := cmd.Flags().GetBool("read-only")
 	cacheDir, _ := cmd.Flags().GetString("cache-dir")
 	bufferSize, _ := cmd.Flags().GetUint64("buffer-size")
+	allowOther, _ := cmd.Flags().GetBool("allow-other")
 
 	// 确保挂载点存在
 	if err := os.MkdirAll(mountPoint, 0755); err != nil {
@@ -77,10 +80,13 @@ func mount(cmd *cobra.Command, args []string) {
 
 	metaClient := meta.NewClient(metaUrl, conf)
 
-	// TODO: 创建FUSE服务并挂载
-	// 这部分需要实现FUSE集成，但目前CandyFS缺少VFS层
+	// 创建并挂载FUSE文件系统
+	candyFS := fs.NewCandyFS(metaClient)
+	if err := candyFS.Mount(mountPoint, allowOther); err != nil {
+		log.Fatalf("FUSE挂载失败: %s", err)
+	}
 
-	// 临时方案：显示挂载信息并等待信号
+	// 显示挂载信息
 	fmt.Printf("元数据服务: %s\n", metaClient.Name())
 	fmt.Printf("挂载点: %s\n", mountPoint)
 	fmt.Printf("缓存目录: %s\n", cacheDir)
@@ -91,18 +97,30 @@ func mount(cmd *cobra.Command, args []string) {
 		fmt.Println("挂载模式: 读写")
 	}
 
-	// 在前台模式下捕获信号
+	// 在前台模式下, 等待文件系统关闭
 	if !background {
 		fmt.Println("\n挂载成功，按 Ctrl+C 卸载")
+		
+		// 捕获信号
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		
+		// 等待信号
 		<-c
 		fmt.Println("\n正在卸载...")
-	}
-
-	// 如果需要在后台运行，可以添加守护进程逻辑
-	if background && runtime.GOOS != "windows" {
-		// TODO: 实现守护进程逻辑
-		fmt.Println("后台模式已启动")
+		
+		// 卸载文件系统
+		if err := candyFS.Unmount(); err != nil {
+			log.Errorf("卸载失败: %s", err)
+		} else {
+			fmt.Println("文件系统已卸载")
+		}
+	} else if runtime.GOOS != "windows" {
+		// 后台运行模式（守护进程）
+		fmt.Println("后台模式已启动，使用以下命令卸载:")
+		fmt.Printf("  fusermount -u %s\n", mountPoint)
+		
+		// 如果在后台运行，启动FUSE服务但不等待关闭
+		candyFS.Serve()
 	}
 }
