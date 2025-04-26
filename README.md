@@ -1,80 +1,137 @@
 # CandyFS
 
-CandyFS is a distributed file system that provides high availability and performance.
+CandyFS是一个基于FUSE的高性能分布式文件系统，旨在提供高可用性、可扩展性和易用性，适用于云原生环境下的数据存储需求。
 
-## 功能特点
+## 项目架构
 
-- 高可用性：支持多副本存储，保证数据不丢失
-- 高性能：优化的数据分布和传输机制
-- 易用性：简单直观的命令行界面
-- 兼容性：支持多种存储和访问方式
+CandyFS采用分层架构设计，主要包含以下几个核心层次：
 
-## 安装方法
+```
+应用层 <-> FUSE接口层 <-> 文件系统核心层 <-> 元数据层 <-> 存储层
+```
+
+### 核心组件
+
+1. **FUSE接口层**
+   - 负责与操作系统内核FUSE模块通信
+   - 将文件系统操作转换为内部API调用
+   - 处理挂载、卸载和文件操作请求
+
+2. **文件系统核心层**
+   - 实现VFS(虚拟文件系统)接口
+   - 管理文件和目录操作
+   - 提供缓存和预读优化
+
+3. **元数据层**
+   - 管理文件和目录的元数据信息
+   - 支持多种元数据存储后端(如Redis)
+   - 提供事务和一致性保障
+
+4. **存储层**
+   - 管理实际数据块的存储
+   - 支持数据分片、备份和恢复
+   - 可扩展到多种存储介质
+
+## 模块拆分
+
+### pkg/fs
+- `fuse.go` - FUSE接口实现
+- `fs.go` - 文件系统核心功能
+- `vfs.go` - 虚拟文件系统抽象
+- `writer.go` - 文件写入缓冲和管理
+
+### pkg/fuse
+- `mount.go` - 挂载管理
+- `fs.go` - FUSE与文件系统的适配层
+
+### pkg/meta
+- `meta.go` - 元数据接口定义
+- `redis.go` - Redis元数据实现
+- `config.go` - 元数据配置管理
+- `base.go` - 基础元数据功能
+
+### utils
+- `log` - 日志管理
+- 其他通用工具函数
+
+### cmd
+- `fuse` - 主程序入口，提供命令行接口
+
+## 数据流程
+
+当应用程序需要读写文件时：
+
+1. 应用程序调用系统调用(如open, read, write)
+2. Linux VFS层将调用转发给FUSE内核模块
+3. FUSE将请求发送到CandyFS用户空间程序
+4. CandyFS处理请求：
+   - 读取/写入文件时，先查询元数据
+   - 定位数据块位置
+   - 执行实际的数据操作
+   - 返回结果给FUSE
+5. FUSE将结果返回给应用程序
+
+## 安装与使用
+
+### 依赖
+
+- Go 1.16+
+- FUSE 3.0+
+- Redis 5.0+ (用于元数据存储)
+
+### 编译
 
 ```bash
-# 从源代码构建
-go build -o candyfs
-
-# 或安装到系统
-go install
+go build -o candyfs cmd/fuse/main.go
 ```
 
-## 命令参考
-
-CandyFS提供了直观的命令行工具，支持以下功能：
-
-### 基础命令
+### 使用
 
 ```bash
-# 显示版本信息
-candyfs version
+# 挂载文件系统
+./candyfs --mount /mnt/candyfs --meta redis://localhost:6379/0
 
-# 全局选项（适用于所有命令）
-candyfs --verbose   # 显示详细输出
+# 卸载文件系统 (按Ctrl+C或发送SIGINT信号)
 ```
 
-### 服务管理
+## 未来功能规划
 
-```bash
-# 启动服务
-candyfs start
-candyfs start --port 9000 --config ./config.yaml
+### 近期计划
 
-# 停止服务
-candyfs stop
+- [x] 基础FUSE接口实现
+- [x] 简单元数据管理
+- [ ] 完整的文件写入支持
+- [ ] 目录操作完善
+- [ ] 权限和访问控制
+- [ ] 性能优化和缓存管理
 
-# 查看服务状态
-candyfs status
-```
+### 中期计划
 
-### 存储管理
+- [ ] 分布式元数据服务
+- [ ] 数据分块和复制策略
+- [ ] 快照和版本管理
+- [ ] 文件锁和并发控制
+- [ ] WebDAV/S3兼容接口
 
-```bash
-# 格式化存储（首次使用前必须执行）
-candyfs format --path /data/storage
+### 长期计划
 
-# 强制格式化（会清除已有数据）
-candyfs format --path /data/storage --force
-```
+- [ ] 多数据中心支持
+- [ ] 数据加密和安全管理
+- [ ] 智能数据分层
+- [ ] 实时数据分析支持
+- [ ] Kubernetes CSI驱动集成
 
-## 配置示例
+## 贡献指南
 
-```yaml
-storage:
-  paths:
-    - /data/storage1
-    - /data/storage2
-  replication: 3
+我们欢迎各种形式的贡献，包括但不限于：
 
-network:
-  listen: 0.0.0.0
-  port: 8080
-  
-logging:
-  level: info
-  path: /var/log/candyfs
-```
+- 代码贡献
+- 文档改进
+- 问题报告
+- 新功能建议
+
+请参考[贡献指南](CONTRIBUTING.md)获取更多信息。
 
 ## 许可证
 
-MIT License
+本项目采用MIT许可证 - 详见[LICENSE](LICENSE)文件。
